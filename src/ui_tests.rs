@@ -4048,6 +4048,7 @@ fn hidden_mail_masks_every_display_field_and_reveal_is_temporary(){
 fn fast_mail_polling_setting_roundtrips_and_preserves_existing_intervals(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let _h=H::new();
     assert_eq!(crate::model::Settings::default().mail_interval,10);
+    std::fs::create_dir_all(crate::model::config_dir()).unwrap();
     for seconds in [10,60,120,300] {
         let path=crate::model::config_dir().join("settings.txt");
         std::fs::write(path,format!("mail_interval={seconds}\n")).unwrap();

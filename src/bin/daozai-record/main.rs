@@ -290,7 +290,7 @@ fn main() {
     // DAOZAI_FAST=1：只跑脚本不出画面，调试点击位置用
     let fast = std::env::var("DAOZAI_FAST").is_ok();
     let ctx = egui::Context::default();
-    let mut app = App::new(&ctx, Options { fetch_lyrics: false, pet_idle: 4.0 });
+    let mut app = App::new(&ctx, Options { fetch_lyrics: false, pet_idle: 4.0, expanded_scale: 1.0 });
 
     let title = "晚风与海";
     let artist = "示例乐队";
@@ -532,7 +532,7 @@ fn gallery() {
     std::fs::create_dir_all(&dest).unwrap();
     for scene in 0..18 {
         let ctx=egui::Context::default();
-        let mut app=App::new(&ctx,Options{fetch_lyrics:false,pet_idle:45.0});
+        let mut app=App::new(&ctx,Options { fetch_lyrics: false, pet_idle: 45.0, expanded_scale: 1.0 });
         app.settings.pet=true;
         let mut ras=raster::Raster::new(1280,380);
         let mut rgba=vec![];

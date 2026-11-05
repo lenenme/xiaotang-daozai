@@ -15,6 +15,10 @@ jobs:
         run: rustup toolchain install stable --profile minimal
       - name: 测试
         run: cargo +stable test --locked --all-targets --features record --target x86_64-pc-windows-msvc -- --test-threads=1
+      - name: 导出原尺寸与放大界面截图
+        env:
+          DAOZAI_PREVIEW_DIR: target/ui-previews
+        run: cargo +stable test --locked --lib --features record --target x86_64-pc-windows-msvc enlarged_panel_preview_gallery -- --ignored --test-threads=1
       - name: 构建并检查发布运行库
         shell: pwsh
         run: |
@@ -34,6 +38,16 @@ jobs:
         run: |
           $compiler = ./scripts/get-nsis.ps1 -Directory $env:RUNNER_TEMP
           ./scripts/package.ps1 -SkipBuild -NsisCompiler $compiler
+      - name: 保存测试版安装包与界面截图
+        uses: actions/upload-artifact@v4
+        with:
+          name: daozai-expanded-ui-windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/SHA256SUMS.txt
+            target/ui-previews/*.png
+          if-no-files-found: error
   installer:
     runs-on: windows-latest
     steps:

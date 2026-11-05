@@ -3,6 +3,9 @@ use crate::app::{App, Env, Options, PH, PW, WIN_H, WIN_W};
 use eframe::egui::{self, Pos2, Rect, Vec2};
 use std::sync::Mutex;
 
+#[path = "expanded_ui_tests.rs"]
+mod expanded_ui_tests;
+
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
@@ -320,13 +323,13 @@ impl H {
         let dir = std::env::temp_dir().join(format!("daozai-test-{}-{}", std::process::id(), rand_id()));
         std::env::set_var("DAOZAI_DATA_DIR", &dir);
         let ctx = egui::Context::default();
-        let app = App::new(&ctx, Options { fetch_lyrics: false, pet_idle: 1e9 });
+        let app = App::new(&ctx, Options { fetch_lyrics: false, pet_idle: 1e9, expanded_scale: 1.0 });
         Self { ctx, app, t: 0.0, cursor: None,cmds:vec![],region:Rect::NOTHING,hit:Rect::NOTHING,animating:false,shapes:Vec::new(), bt:Vec::new(),media:Default::default(),power:(None,false),network:None,system_idle:None,browser_at_top:None,file_drop_zone:None,hovered_files:vec![],dropped_files:vec![] }
     }
     fn frame(&mut self, events: Vec<egui::Event>) {
         self.t += 1.0 / 60.0;
         let raw = egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(crate::app::CANVAS_W, WIN_H))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(crate::app::CANVAS_W, WIN_H*self.app.opts.expanded_scale))),
             time: Some(self.t),
             events,
             hovered_files:self.hovered_files.clone(),
@@ -358,7 +361,7 @@ impl H {
         let file_drop_zone=&mut self.file_drop_zone;
         let output = self.ctx.run(raw, |ctx| {
             egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx, |ui| {
-                let win = Rect::from_min_size(ui.max_rect().min,Vec2::new(WIN_W,WIN_H));
+                let win = Rect::from_min_size(ui.max_rect().min,Vec2::new(WIN_W,WIN_H)*app.opts.expanded_scale);
                 let frame=app.frame(ui, win, &env);*region=frame.region;*hit=frame.hit;*animating=frame.animating;*file_drop_zone=frame.file_drop_zone;cmds.extend(frame.cmds);
             });
         });
@@ -1450,7 +1453,7 @@ fn page_visibility_is_saved_and_sets_the_starting_page() {
     let settings=crate::model::Settings::load();
     assert!(!settings.show_battery);
     assert_eq!(settings.visible_pages,[false,true,true,false,true,true,true,true]);
-    let restarted=App::new(&h.ctx,Options{fetch_lyrics:false,pet_idle:1e9});
+    let restarted=App::new(&h.ctx,Options { fetch_lyrics: false, pet_idle: 1e9, expanded_scale: 1.0 });
     assert_eq!(restarted.page(),1);
     assert_eq!(restarted.settings.visible_pages,settings.visible_pages);
     assert!(!restarted.settings.show_battery);
@@ -3526,7 +3529,7 @@ fn page_order_persists_and_controls_navigation() {
     h.app.settings.save();
     let settings=crate::model::Settings::load();
     assert_eq!(settings.page_order,[5,2,0,1,3,4,6,7]);
-    let restarted=App::new(&h.ctx,Options{fetch_lyrics:false,pet_idle:1e9});
+    let restarted=App::new(&h.ctx,Options { fetch_lyrics: false, pet_idle: 1e9, expanded_scale: 1.0 });
     assert_eq!(restarted.page(),5);
     for page in [1,3,4,6,7] {h.app.set_page_visible(page,false);}
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);

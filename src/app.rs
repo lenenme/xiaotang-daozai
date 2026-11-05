@@ -36,8 +36,11 @@ pub const FLARE: f32 = 17.6; // 顶部外翻肩宽
 pub const FLARE_H: f32 = 16.0; // 外翻收敛高度
 pub const RAD: f32 = 33.0; // 底部圆角
 pub const WIN_W: f32 = 640.0; // 窗口（透明画布）
-pub const CANVAS_W: f32 = WIN_W + 320.0; // 保留右侧通知及阴影的完整空间，原岛仍按 WIN_W 定位。
+pub const CANVAS_W: f32 = HOST_W + 320.0; // 透明宿主为放大面板及右侧通知保留空间。
 pub const WIN_H: f32 = 270.0;
+pub const EXPANDED_SCALE: f32 = 1.5;
+pub const HOST_W: f32 = WIN_W * EXPANDED_SCALE;
+pub const HOST_H: f32 = WIN_H * EXPANDED_SCALE;
 pub(crate) const PAGE_NAMES: [&str; 8] = ["音乐", "专注", "饮水", "置物架", "待办", "邮箱", "AI 额度", "日程"];
 
 // ---------- 动效参数 ----------
@@ -56,6 +59,8 @@ const SWELL_K: (f32, f32) = (420.0, 0.8);
 const PAGE_SLIDE: f32 = 46.0;
 
 pub struct Options {
+    /// 展开内容比例；收起状态始终使用原尺寸。
+    pub expanded_scale: f32,
     /// 是否联网查歌词（录制/测试时关掉）。
     pub fetch_lyrics: bool,
     /// 吉祥物在多久无操作后出现（秒）。
@@ -64,7 +69,7 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Self { fetch_lyrics: true, pet_idle: 45.0 }
+        Self { fetch_lyrics: true, pet_idle: 45.0, expanded_scale: EXPANDED_SCALE }
     }
 }
 
@@ -944,7 +949,7 @@ impl App {
         self.go(page,1.0);
         self.open=true; self.forced_open_until=self.t+4.0;
         self.w.tune(OPEN_W.0,OPEN_W.1);self.h.tune(OPEN_H.0,OPEN_H.1);
-        self.w.target=PW;self.h.target=self.expanded_height();
+        self.w.target=PW*self.opts.expanded_scale;self.h.target=self.expanded_height()*self.opts.expanded_scale;
     }
     pub fn open_settings(&mut self){
         self.settings_open=true;
@@ -1112,7 +1117,11 @@ impl App {
 
     pub fn progress(&self) -> f32 {
         let (_, bh) = self.base_size();
-        (self.h.pos - bh) / (self.expanded_height() - bh)
+        (self.h.pos - bh) / (self.expanded_height()*self.opts.expanded_scale - bh)
+    }
+
+    fn content_scale(&self)->f32 {
+        lerp(1.0,self.opts.expanded_scale,anim::clamp01(self.progress()))
     }
 
     pub(crate) fn expanded_height(&self)->f32 {
@@ -1233,7 +1242,8 @@ impl App {
                 self.wheel_delta=0.0;
                 self.navigate_page(right);
             } else if scroll!=0.0 {
-                let cursor=env.cursor.unwrap()-Vec2::new(cx-PW/2.0,top);
+                let scale=self.content_scale();
+                let cursor=Pos2::new((env.cursor.unwrap().x-(cx-PW*scale/2.0))/scale,(env.cursor.unwrap().y-top)/scale);
                 let mail_body=self.page==5 && self.mail.open_uid.is_some()
                     && Rect::from_min_max(Pos2::new(46.0,104.0),Pos2::new(374.0,194.0)).contains(cursor);
                 let mail_list=self.page==5 && !self.mail.accounts.is_empty() && self.mail.open_uid.is_none() && self.mail_list_bounds().contains(cursor);
@@ -1279,13 +1289,14 @@ impl App {
         let (w, h) = (self.w.pos, self.h.pos);
         let panel = Rect::from_min_size(Pos2::new(cx - w / 2.0, top), Vec2::new(w, h));
         let pc = anim::clamp01(p);
+        let scale=self.content_scale();
         let painter = ui.painter_at(ui.max_rect().expand(40.0));
         let feather = 1.0 / ctx.pixels_per_point();
         let minimal_pill = self.effective_minimal() && !self.island_lyrics_active() && self.notice.is_none() && self.t>=self.notification_bell_until && pc < 0.02;
-        let flare = if minimal_pill { 0.0 } else { lerp(5.0, FLARE, pc) };
+        let flare = if minimal_pill { 0.0 } else { lerp(5.0, FLARE*scale, pc) };
         let k = (w / PW).clamp(0.3, 1.1);
-        let radius = if minimal_pill { BAR_H_MIN / 2.0 } else { lerp(12.5, RAD * k.min(1.0), pc) };
-        let flare_h = lerp(8.0, FLARE_H, pc);
+        let radius = if minimal_pill { BAR_H_MIN / 2.0 } else { lerp(12.5, RAD * k.min(1.0)*scale, pc) };
+        let flare_h = lerp(8.0, FLARE_H*scale, pc);
         let thick = glass::thickness(PH);
         let shadow_k = glass::shadow_alpha(0.0, thick) / 0.12;
         shape::shadow(&painter, panel, flare, flare_h, radius, smoothstep(0.1, 0.9, pc) * shadow_k);
@@ -1298,9 +1309,10 @@ impl App {
         // 内容只随形体「揭开」：不缩放，按面板裁剪，到 55% 才开始淡入
         let reveal = if self.open { smoothstep(0.50, 0.97, p) } else { smoothstep(0.55, 0.92, p) };
         self.reveal = reveal;
-        let origin = Pos2::new(cx - PW / 2.0, top);
+        let origin = Pos2::new(cx - PW*scale / 2.0, top);
         let clip = panel.intersect(win);
-        let base = Card::new(ui, origin, clip);
+        let mut base = Card::new(ui, origin, clip);
+        base.s=scale;
         self.cursor_local = env.cursor.map(|p| base.to_local(p));
 
         let banner=!self.compact_notices()&&self.notice.is_some()&&!self.open;
@@ -1350,7 +1362,7 @@ impl App {
         let pet_alpha=self.pet_a*(1.0-smoothstep(0.0,0.3,pc));
         if pet_alpha>0.004 && !minimal_pill {
             let y=(h.min(self.base_size().1)-BAR_H).max(0.0)/2.0;
-            self.pet.draw(&base.shifted(0.0,y).faded(pet_alpha),cx-origin.x+self.resident.position(bar::PET),self.t);
+            self.pet.draw(&base.shifted(0.0,y).faded(pet_alpha),(cx-origin.x)/scale+self.resident.position(bar::PET),self.t);
         }
         if reveal > 0.004 && !banner && !restoring_lyrics {
             let c = base.shifted(0.0, (1.0 - reveal) * -5.0).faded(reveal);
@@ -1360,20 +1372,21 @@ impl App {
         }
         // 岛下的确认提示使用独立裁剪区域，收起时跟随岛体下沿。
         let floating_toast=if self.toast_below && self.toast.is_some() {
-            self.toast_layer(&Card::new(ui,origin,win),h+8.0)
+            let mut toast=Card::new(ui,origin,win);toast.s=scale;
+            self.toast_layer(&toast,(h+8.0)/scale)
         }else{None};
         if (self.adding||self.editing.is_some()) && reveal > 0.9 && self.page == 4 && self.page_e() > 0.25 {
-            self.input_field(ui, origin, &mut cmds);
+            self.input_field(&base, &mut cmds);
         }
 
-        if self.task_dialog.is_some() && reveal>0.9 {self.task_editor_inputs(ui,origin,&mut cmds);}
-        if self.calendar.draft.is_some() && reveal>0.9 {self.calendar_editor_inputs(ui,origin,&mut cmds);}
+        if self.task_dialog.is_some() && reveal>0.9 {self.task_editor_inputs(&base,&mut cmds);}
+        if self.calendar.draft.is_some() && reveal>0.9 {self.calendar_editor_inputs(&base,&mut cmds);}
 
         // ---------- 输出 ----------
         let rel = |r: Rect| r.translate(-win.min.to_vec2());
         let mut region = if p > 0.02 || self.open {
-            let height=self.expanded_height().max(self.h.pos)*1.08+16.0;
-            Rect::from_center_size(Pos2::new(cx, top + height/2.0), Vec2::new(PW + FLARE * 2.0 + 56.0, height))
+            let height=(self.expanded_height()*self.opts.expanded_scale).max(self.h.pos)*1.08+16.0*scale;
+            Rect::from_center_size(Pos2::new(cx, top + height/2.0), Vec2::new((PW + FLARE * 2.0 + 56.0)*self.opts.expanded_scale, height))
         } else {
             let (bw, bh) = self.base_size();
             Rect::from_center_size(Pos2::new(cx, top + (bh * SWELL.1 + 12.0) / 2.0), Vec2::new(bw * SWELL.0 + 24.0, bh * SWELL.1 + 12.0))
@@ -1388,8 +1401,8 @@ impl App {
                 }
             }
         });
-        let transitioning = !self.w.settled(PW)
-            || !self.h.settled(self.expanded_height())
+        let transitioning = !self.w.settled(PW*self.opts.expanded_scale)
+            || !self.h.settled(self.expanded_height()*self.opts.expanded_scale)
             || self.page_e() < 0.7
             || self.dots.iter().any(|d| !d.settled(16.0))
             || self.hover_since.is_some() && !self.open
@@ -1417,7 +1430,7 @@ impl App {
             region: rel(floating_toast.map_or(region,|toast|region.union(toast)).intersect(ui.max_rect())),
             hit: rel(self.hit_rect(cx, top, self.progress())),
             notice_hit:notice_shape.map(|r|rel(notice_details.map_or(r,|details|r.union(details)))),
-            file_drop_zone:self.settings.visible_pages[3].then(||rel(Rect::from_min_size(Pos2::new(cx-PW/2.0,top),Vec2::new(PW,96.0)))),
+            file_drop_zone:self.settings.visible_pages[3].then(||rel(base.rect(0.0,0.0,PW,96.0))),
             expanded: self.open,
             editing: self.is_editing(),
             animating,
@@ -1435,7 +1448,8 @@ impl App {
         } else if self.notice.is_some()&&!self.compact_notices()&&!self.open {
             let (w,h)=self.base_size();Rect::from_min_size(Pos2::new(cx-(w+8.0)/2.0,top),Vec2::new(w+8.0,h+6.0))
         } else if p > 0.04 || self.open {
-            Rect::from_min_size(Pos2::new(cx - PW / 2.0 - 4.0, top), Vec2::new(PW + 8.0, self.expanded_height() + 2.0))
+            let scale=self.content_scale();
+            Rect::from_min_size(Pos2::new(cx - PW*scale / 2.0 - 4.0, top), Vec2::new(PW*scale + 8.0, self.expanded_height()*scale + 2.0))
         } else {
             let (bw,bh)=self.base_size();
             let (hit_w,hit_h)=(bw+12.0,bh+4.0);
@@ -1465,8 +1479,8 @@ impl App {
                 self.open = true;
                 self.w.tune(OPEN_W.0, OPEN_W.1);
                 self.h.tune(OPEN_H.0, OPEN_H.1);
-                self.w.target = PW;
-                self.h.target = self.expanded_height();
+                self.w.target = PW*self.opts.expanded_scale;
+                self.h.target = self.expanded_height()*self.opts.expanded_scale;
                 if self.drag_hot {
                     // 拖入不等缓冲，直接给一点初速度，30 ms 内就能看到形变
                     self.w.vel = self.w.vel.max(600.0);
@@ -1500,7 +1514,7 @@ impl App {
             }
         }
         let _ = inside;
-        if self.open {self.h.target=self.expanded_height();}
+        if self.open {self.h.target=self.expanded_height()*self.opts.expanded_scale;}
         let (prev_w,prev_h)=(self.w.pos,self.h.pos);
         self.w.step(dt);
         self.h.step(dt);
@@ -1519,13 +1533,13 @@ impl App {
     // 顶栏：电池 + 日期 + 时钟。药丸里的电池与时钟会「飞」到顶栏位置（共享元素过渡）。
     // ---------------------------------------------------------------
     fn shared_header(&mut self, base: &Card, cx: f32, p: f32, reveal: f32, env: &Env) {
-        let local_cx = cx - base.origin.x;
+        let local_cx = (cx - base.origin.x)/base.s;
         let lyric=self.island_lyric();
         let lyric_alpha=if self.island_lyrics_active() {1.0-smoothstep(0.0,0.35,p)}else{0.0};
         if let Some(galley)=self.island_lyric_layout.clone().filter(|_|lyric_alpha>0.003) {
             let c=base.faded(lyric_alpha);
             let content_width=self.lyric_bar_width()-self.lyric_focus_space();
-            let width=self.w.pos.max(content_width);
+            let width=(self.w.pos/base.s).max(content_width);
             let left=local_cx-width/2.0;
             let center_y=BAR_H/2.0;
             if let Some((image,texture))=&self.music_artwork {
@@ -1989,17 +2003,19 @@ impl App {
     }
 
     /// 待办输入框：真正的 egui 文本框，放在待办卡片顶部那一行。
-    fn input_field(&mut self, ui: &mut egui::Ui, origin: Pos2, cmds: &mut Vec<Cmd>) {
-        let rect = Rect::from_min_size(origin + Vec2::new(222.0, 37.0), Vec2::new(142.0, 18.0));
+    fn input_field(&mut self, c: &Card, cmds: &mut Vec<Cmd>) {
+        let rect = c.rect(222.0,37.0,142.0,18.0);
         let mut buf = std::mem::take(&mut self.buf);
         let te = egui::TextEdit::singleline(&mut buf)
             .id(egui::Id::new("todo-input"))
             .frame(false)
             .margin(egui::Margin::ZERO)
             .text_color(theme::WHITE)
-            .font(theme::font(size::BODY, W::Regular))
-            .hint_text(egui::RichText::new("要做点什么？回车保存").color(theme::DIM).font(theme::font(size::BODY, W::Regular)))
+            .font(c.font(size::BODY, W::Regular))
+            .hint_text(egui::RichText::new("要做点什么？回车保存").color(theme::DIM).font(c.font(size::BODY, W::Regular)))
             .desired_width(rect.width());
+        let mut input_ui=c.ui.new_child(egui::UiBuilder::new().max_rect(rect));
+        let ui=&mut input_ui;
         let resp = ui.put(rect, te);
         let first_focus=!self.todo_input_focused;
         self.buf=buf;

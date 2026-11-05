@@ -229,7 +229,7 @@ impl Window {
     /// 使用目标屏幕的物理坐标定位，并在缩放或屏幕连接变化后重新校正。
     pub fn place_on_display(&self, scale:f32, bounds:crate::display_layout::Bounds)->bool {
         unsafe {
-            let Some((x,y))=crate::display_layout::island_origin(bounds,crate::app::WIN_W,scale) else{return false;};
+            let Some((x,y))=crate::display_layout::island_origin(bounds,crate::app::HOST_W,scale) else{return false;};
             let mut current=RECT::default();
             if GetWindowRect(self.hwnd,&mut current).is_err(){return false;}
             if (current.left,current.top)!=(x,y) && SetWindowPos(self.hwnd,None,x,y,0,0,SWP_NOSIZE|SWP_NOACTIVATE|SWP_NOZORDER).is_err(){return false;}

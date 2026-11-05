@@ -333,7 +333,7 @@ impl eframe::App for Shell {
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(Color32::TRANSPARENT))
             .show(ctx, |ui| {
-                let win = egui::Rect::from_min_size(ui.max_rect().min,egui::vec2(app::WIN_W,app::WIN_H));
+                let win = egui::Rect::from_min_size(ui.max_rect().min,egui::vec2(app::HOST_W,app::HOST_H));
                 out = Some(self.app.frame(ui, win, &env));
             });
         let Some(out) = out else { return };
@@ -563,7 +563,7 @@ fn run() -> eframe::Result<()> {
     diagnostics::startup("初始化图形窗口");
     let viewport = egui::ViewportBuilder::default()
         .with_title("岛仔").with_icon(daozai::theme::app_icon())
-        .with_inner_size([app::CANVAS_W, app::WIN_H])
+        .with_inner_size([app::CANVAS_W, app::HOST_H])
         .with_decorations(false)
         .with_transparent(true)
         .with_active(false)

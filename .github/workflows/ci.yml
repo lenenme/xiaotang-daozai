@@ -8,11 +8,21 @@ jobs:
   test:
     runs-on: windows-latest
     env:
-      CARGO_BUILD_JOBS: 1
+      CARGO_BUILD_JOBS: 2
     steps:
       - uses: actions/checkout@v4
       - name: 安装 Rust stable
         run: rustup toolchain install stable --profile minimal
+      - name: 恢复编译缓存
+        id: rust-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-rust-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          restore-keys: windows-rust-${{ hashFiles('Cargo.lock') }}-
       - name: 测试
         run: cargo +stable test --locked --all-targets --features record --target x86_64-pc-windows-msvc -- --test-threads=1
       - name: 导出原尺寸与放大界面截图
@@ -39,6 +49,7 @@ jobs:
           $compiler = ./scripts/get-nsis.ps1 -Directory $env:RUNNER_TEMP
           ./scripts/package.ps1 -SkipBuild -NsisCompiler $compiler
       - name: 保存测试版安装包与界面截图
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: daozai-expanded-ui-windows
@@ -47,7 +58,16 @@ jobs:
             dist/*.zip
             dist/SHA256SUMS.txt
             target/ui-previews/*.png
-          if-no-files-found: error
+          if-no-files-found: warn
+      - name: 保存编译缓存
+        if: always() && steps.rust-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-rust-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
   installer:
     runs-on: windows-latest
     steps:

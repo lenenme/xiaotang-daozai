@@ -1122,6 +1122,7 @@ impl App {
 
     fn content_scale(&self)->f32 {
         let (width,_)=self.base_size();
+        if (self.w.pos-width).abs()<0.001 {return 1.0;}
         let progress=(self.w.pos-width)/(PW*self.opts.expanded_scale-width);
         lerp(1.0,self.opts.expanded_scale,anim::clamp01(progress))
     }

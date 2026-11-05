@@ -114,7 +114,7 @@ fn enlarged_panel_music_seek_uses_the_enlarged_track_position(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=enlarged();
     h.media=crate::smtc::NowPlaying{source:"spotify".into(),title:"测试音乐".into(),artist:"测试歌手".into(),duration:200.0,position:10.0,playing:true,..Default::default()};
     h.hover(Pos2::new(HOST_W/2.0,15.0),1.5);
-    let track=h.ctx.read_response(egui::Id::new(("card",true,"m-seek"))).unwrap().rect;
+    let track=h.ctx.read_response(egui::Id::new(("card-drag",true,"m-seek"))).unwrap().rect;
     h.cmds.clear();h.click(track.center());
     assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Media(crate::smtc::Transport::Seek(seconds)) if (*seconds-100.0).abs()<2.0)));
 }

@@ -4,7 +4,7 @@
 //! 不引 Node/Go/Electron。凭据一律进 Windows 凭据管理器（`keyring`），
 //! 账号清单只存「邮箱 + 类型 + 是否监控」，不存密码。
 //!
-//! 收信优先 `Session::idle()` 长连接；服务器不支持 IDLE 时退回轮询（60/120/300 秒）。
+//! 收信优先 `Session::idle()` 长连接；服务器不支持 IDLE 时退回轮询（10/60/120/300 秒）。
 //! 正文只在内存里解析，不落盘、不缓存。
 
 use std::collections::HashMap;
@@ -809,11 +809,11 @@ mod service {
 
     fn supervisor(cmd_rx: Receiver<Cmd>, ev: Sender<Event>) {
         let mut workers: HashMap<String, (Arc<AtomicBool>, std::thread::JoinHandle<()>,Account)> = HashMap::new();
-        let interval = Arc::new(AtomicU64::new(120));
+        let interval = Arc::new(AtomicU64::new(10));
         while let Ok(cmd) = cmd_rx.recv() {
             match cmd {
                 Cmd::Sync(accounts, secs) => {
-                    interval.store(secs.clamp(30, 900) as u64, Ordering::Relaxed);
+                    interval.store(secs.clamp(10, 900) as u64, Ordering::Relaxed);
                     let wanted: HashMap<String, Account> = accounts
                         .into_iter()
                         .filter(|a| a.enabled)
@@ -953,10 +953,6 @@ mod service {
                 }
             };
             if stop.load(Ordering::Relaxed){let _=session.logout();return;}
-            let _ = ev.send(Event::Status {
-                account: account.email.clone(),
-                status: Status::Ready,
-            });
             if session.select("INBOX").is_err() {
                 let _ = ev.send(Event::Status {
                     account: account.email.clone(),
@@ -967,15 +963,29 @@ mod service {
                 }
                 continue;
             }
-            if first {
-                last_uid = recent(&mut session, &account, &ev).unwrap_or(0);
-                first = false;
+            // 首次读取失败不能推进游标；重连后先补收断线期间的邮件，再进入等待。
+            let synced = if first {
+                recent(&mut session, &account, &ev).map(|uid| { last_uid = uid; first = false; })
+            } else {
+                fetch_new(&mut session, &account, &mut last_uid, &ev)
+            };
+            if synced.is_err() {
+                let _ = ev.send(Event::Status {
+                    account: account.email.clone(),
+                    status: Status::Failed("读取邮件失败，正在重试".into()),
+                });
+                if sleep_stop(&stop, 10) { return; }
+                continue;
             }
 
             let idle_supported=match session.capabilities() {
                 Ok(capabilities)=>capabilities.has_str("IDLE"),
-                Err(_)=>{if sleep_stop(&stop,10){return;}continue;},
+                Err(_)=>{
+                    let _ = ev.send(Event::Status { account: account.email.clone(), status: Status::Failed("连接中断，正在重连".into()) });
+                    if sleep_stop(&stop,10){return;}continue;
+                },
             };
+            let _ = ev.send(Event::Status { account: account.email.clone(), status: Status::Ready });
             loop {
                 if stop.load(Ordering::Relaxed) {
                     let _ = session.logout();
@@ -1001,6 +1011,7 @@ mod service {
                     break;
                 }
             }
+            let _ = ev.send(Event::Status { account: account.email.clone(), status: Status::Failed("连接中断，正在重连".into()) });
             if sleep_stop(&stop, 10) {
                 return;
             }
@@ -1008,8 +1019,8 @@ mod service {
     }
 
     /// 首次连接：把最近 20 封读进面板，但不当作新邮件提示。
-    fn recent(
-        session: &mut imap::Session<net::Prefixed<net::Stream>>,
+    fn recent<T: std::io::Read + std::io::Write>(
+        session: &mut imap::Session<T>,
         account: &Account,
         ev: &Sender<Event>,
     ) -> Result<u32, ()> {
@@ -1019,11 +1030,73 @@ mod service {
         let max = uids.last().copied().unwrap_or(0);
         let tail: Vec<u32> = uids.iter().rev().take(20).rev().copied().collect();
         for uid in tail {
-            if let Ok(Some(item))=super::fetch::item(session,uid,account){
+            if let Some(item)=super::fetch::item(session,uid,account)? {
                 let _=ev.send(Event::Mail{item,new:false});
             }
         }
         Ok(max)
+    }
+
+    #[test]
+    fn failed_reads_retry_without_skipping_mail_or_notifying_history() {
+        use std::io::{BufRead,Write};
+        let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address=listener.local_addr().unwrap();
+        let message=|uid:u32|{
+            let header="From: test@example.com\r\nSubject: Test mail\r\nContent-Type: text/plain\r\n\r\n";
+            format!("* 1 FETCH (UID {uid} BODY[HEADER] {{{}}}\r\n{header} BODY[TEXT] {{4}}\r\nTest)\r\n@TAG@ OK fetched\r\n",header.len())
+        };
+        let replies=vec![
+            ("LOGIN", "@TAG@ OK login\r\n".into()),
+            ("UID SEARCH ALL", "@TAG@ NO temporary search failure\r\n".into()),
+            ("UID SEARCH ALL", "* SEARCH 42\r\n@TAG@ OK search\r\n".into()),
+            ("BODYSTRUCTURE", "@TAG@ NO temporary fetch failure\r\n".into()),
+            ("BODY.PEEK[TEXT]", "@TAG@ NO temporary fetch failure\r\n".into()),
+            ("UID SEARCH ALL", "* SEARCH 42\r\n@TAG@ OK search\r\n".into()),
+            ("BODYSTRUCTURE", "@TAG@ BAD unsupported\r\n".into()),
+            ("BODY.PEEK[TEXT]", message(42)),
+            ("UID SEARCH UID 43:*", "* SEARCH 42\r\n@TAG@ OK search\r\n".into()),
+            ("UID SEARCH UID 43:*", "* SEARCH 42 43\r\n@TAG@ OK search\r\n".into()),
+            ("BODYSTRUCTURE", "@TAG@ NO temporary fetch failure\r\n".into()),
+            ("BODY.PEEK[TEXT]", "@TAG@ NO temporary fetch failure\r\n".into()),
+            ("UID SEARCH UID 43:*", "* SEARCH 43\r\n@TAG@ OK search\r\n".into()),
+            ("BODYSTRUCTURE", "@TAG@ BAD unsupported\r\n".into()),
+            ("BODY.PEEK[TEXT]", message(43)),
+        ];
+        let server=std::thread::spawn(move||{
+            let (mut socket,_)=listener.accept().unwrap();
+            socket.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+            let mut reader=std::io::BufReader::new(socket.try_clone().unwrap());
+            write!(socket,"* OK ready\r\n").unwrap();
+            for (expected,reply) in replies {
+                let mut line=String::new();reader.read_line(&mut line).unwrap();
+                assert!(line.contains(expected),"unexpected command: {line}");
+                assert!(!line.contains("BODY["),"读取不能改变未读状态");
+                let tag=line.split_whitespace().next().unwrap();
+                write!(socket,"{}",reply.replace("@TAG@",tag)).unwrap();
+            }
+        });
+        let socket=std::net::TcpStream::connect(address).unwrap();
+        socket.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let mut client=imap::Client::new(socket);client.read_greeting().unwrap();
+        let mut session=client.login("test","test").unwrap();
+        let account=Account{email:"test@example.com".into(),provider:Provider::Mail163,custom:None,enabled:true};
+        let (tx,rx)=std::sync::mpsc::channel();
+        assert!(recent(&mut session,&account,&tx).is_err());
+        assert!(recent(&mut session,&account,&tx).is_err(),"读取失败不能被当作同步完成");
+        assert!(rx.try_recv().is_err());
+        let mut last=recent(&mut session,&account,&tx).unwrap();
+        assert_eq!(last,42);
+        assert!(matches!(rx.try_recv().unwrap(),Event::Mail{item,new:false} if item.uid==42));
+        fetch_new(&mut session,&account,&mut last,&tx).unwrap();
+        assert!(rx.try_recv().is_err(),"UID 范围返回的旧邮件不能重复提醒");
+        assert!(fetch_new(&mut session,&account,&mut last,&tx).is_err());
+        assert_eq!(last,42,"读取失败不能跳过新邮件");
+        fetch_new(&mut session,&account,&mut last,&tx).unwrap();
+        assert_eq!(last,43);
+        assert!(matches!(rx.try_recv().unwrap(),Event::Mail{item,new:true} if item.uid==43));
+        assert!(rx.try_recv().is_err());
+        server.join().unwrap();
     }
 
     #[test]
@@ -1093,8 +1166,8 @@ mod service {
         session.logout().expect("退出失败");
     }
 
-    fn fetch_new(
-        session: &mut imap::Session<net::Prefixed<net::Stream>>,
+    fn fetch_new<T: std::io::Read + std::io::Write>(
+        session: &mut imap::Session<T>,
         account: &Account,
         last: &mut u32,
         ev: &Sender<Event>,

@@ -837,11 +837,11 @@ fn number_stepper<N:egui::emath::Numeric>(ui:&mut egui::Ui,value:&mut N,min:N,ma
     });
     changed
 }
-fn setting_choices(ui:&mut egui::Ui,title:&str,value:&mut u32,values:[u32;3],unit:&str){
+fn setting_choices<const N:usize>(ui:&mut egui::Ui,title:&str,value:&mut u32,values:[u32;N],unit:&str){
     let ctx=&ui.ctx().clone();
     settings_control_row(ui,title,80.0,|ui|{
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
-            ui.allocate_ui_with_layout(egui::vec2(192.0,29.0),egui::Layout::left_to_right(egui::Align::Center),|ui|{
+            ui.allocate_ui_with_layout(egui::vec2(63.0*N as f32+3.0,29.0),egui::Layout::left_to_right(egui::Align::Center),|ui|{
                 egui::Frame::new().fill(settings_color(ctx,Color32::from_rgb(28,28,30),Color32::from_rgb(235,238,243))).corner_radius(7.0).inner_margin(2).show(ui,|ui|{
                     ui.spacing_mut().item_spacing.x=1.0;
                     ui.horizontal(|ui|{
@@ -1174,7 +1174,7 @@ impl App {
                             ui.separator();
                             setting_choices(ui,"验证码隐藏",&mut self.settings.mail_code_hide_seconds,[30,60,300],"秒");
                             ui.label("默认 60 秒。明确有效时长更短时提前隐藏；历史邮件默认隐藏。隐藏不代表失效，主动查看后 15 秒再次隐藏。");
-                            setting_choices(ui,"检查间隔",&mut self.settings.mail_interval,[60,120,300],"秒");
+                            setting_choices(ui,"检查间隔",&mut self.settings.mail_interval,[10,60,120,300],"秒");
                             ui.label(egui::RichText::new("支持推送时实时收信，并每 10 秒补查；以上间隔仅用于不支持推送的邮箱。").size(11.5).color(settings_color(ctx,Color32::from_gray(195),Color32::from_gray(60))));
                             ui.separator();
                             setting_choices(ui,"会议提前",&mut self.settings.mail_ics,[5,15,30],"分钟");

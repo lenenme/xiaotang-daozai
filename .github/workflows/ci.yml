@@ -22,7 +22,9 @@ jobs:
             ~/.cargo/git
             target
           key: windows-rust-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
-          restore-keys: windows-rust-${{ hashFiles('Cargo.lock') }}-
+          restore-keys: |
+            windows-rust-${{ hashFiles('Cargo.lock') }}-
+            windows-rust-
       - name: 测试
         run: cargo +stable test --locked --all-targets --features record --target x86_64-pc-windows-msvc -- --test-threads=1
       - name: 导出原尺寸与放大界面截图

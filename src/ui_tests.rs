@@ -3611,7 +3611,7 @@ fn settings_theme_follows_system_and_preserves_island_style() {
                         1=>&[("时间偏移","0.35 秒")],
                         2=>&[("专注","25 分钟"),("休息","5 分钟")],
                         3=>&[("每日目标","2000 ml"),("每次记录","250 ml"),("提醒间隔","45 分钟"),("提醒时段","9 时")],
-                        7=>&[("验证码隐藏","60 秒"),("检查间隔","120 秒"),("会议提前","15 分钟"),("邮箱","输入邮箱地址"),("授权码","输入邮箱授权码")],
+                        7=>&[("验证码隐藏","60 秒"),("检查间隔","10 秒"),("会议提前","15 分钟"),("邮箱","输入邮箱地址"),("授权码","输入邮箱授权码")],
                         8=>&[("用户名","输入用户名或粘贴账号信息"),("密码","输入平台生成的密码")],
                         11=>&[("服务","Codex"),("备注","例如：个人、工作、备用"),("选择该账号的登录文件","选择…")],
                         _=>&[],
@@ -4045,11 +4045,27 @@ fn hidden_mail_masks_every_display_field_and_reveal_is_temporary(){
 }
 
 #[test]
+fn fast_mail_polling_setting_roundtrips_and_preserves_existing_intervals(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let _h=H::new();
+    assert_eq!(crate::model::Settings::default().mail_interval,10);
+    for seconds in [10,60,120,300] {
+        let path=crate::model::config_dir().join("settings.txt");
+        std::fs::write(path,format!("mail_interval={seconds}\n")).unwrap();
+        let settings=crate::model::Settings::load();
+        assert_eq!(settings.mail_interval,seconds);
+        settings.save();
+        assert_eq!(crate::model::Settings::load().mail_interval,seconds);
+    }
+}
+
+#[test]
 fn new_mail_notification_masks_codes_in_sender_and_history(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.mail.accounts=vec![crate::mail::Account{email:"a@example.com".into(),provider:crate::mail::Provider::Qq,custom:None,enabled:true}];
     let item=crate::mail::Item{received_unix:None,account:"a@example.com".into(),from:"登录验证码 123456".into(),subject:"验证码 123456".into(),time:"09:41".into(),code:Some("123456".into()),summary:"验证码 123456".into(),links:vec![],meeting:None,uid:42};
     h.app.mail_event(crate::mail::Event::Mail{item,new:true});
+    assert_eq!(h.app.mail.recent[0].uid,42,"新邮件必须进入列表");
+    assert!(h.app.notification_bell_until>h.app.t,"新邮件必须触发岛上提醒");
     assert!(!h.app.history.is_empty());
     for alert in h.app.alerts.iter().chain(h.app.history.iter()) {
         assert!(!alert.body.contains("123456"),"通知和历史记录不能留下验证码明文");

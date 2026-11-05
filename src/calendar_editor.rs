@@ -71,16 +71,15 @@ impl App {
         b.centered_text(334.0,199.0,"保存",10.0,W::Semibold,theme::WHITE,H::Center);
         if delete{self.delete_calendar_editor();}else if cancel.clicked(){self.calendar.draft=None;}else if save.clicked(){self.save_calendar_editor();}
     }
-    pub(crate) fn calendar_editor_inputs(&mut self,c:&Card,cmds:&mut Vec<Cmd>){
+    pub(crate) fn calendar_editor_inputs(&mut self,ui:&mut egui::Ui,origin:egui::Pos2,scale:f32,cmds:&mut Vec<Cmd>){
         let Some(d)=self.calendar.draft.as_mut() else{return;};
-        let mut input_ui=c.ui.new_child(egui::UiBuilder::new().max_rect(c.ui.max_rect()));
-        let mut input=|text:&mut String,id:&str,x:f32,y:f32,width:f32|input_ui.put(c.rect(x,y,width,19.0),
-            egui::TextEdit::singleline(text).id(egui::Id::new(id)).frame(false).margin(egui::Margin::ZERO).text_color(theme::WHITE).font(c.font(11.0,W::Regular)));
+        let mut input=|text:&mut String,id:&str,x:f32,y:f32,width:f32|ui.put(egui::Rect::from_min_size(origin+egui::vec2(x,y)*scale,egui::vec2(width,19.0)*scale),
+            egui::TextEdit::singleline(text).id(egui::Id::new(id)).frame(false).margin(egui::Margin::ZERO).text_color(theme::WHITE).font(theme::font(11.0*scale,W::Regular)));
         let name=input(&mut d.title,"calendar-local-title",92.0,41.0,272.0);
         input(&mut d.start_date,"calendar-local-start-date",92.0,74.0,108.0);
         input(&mut d.end_date,"calendar-local-end-date",92.0,106.0,108.0);
         if !d.all_day {input(&mut d.start_time,"calendar-local-start-time",220.0,74.0,54.0);input(&mut d.end_time,"calendar-local-end-time",220.0,106.0,54.0);}
         let first=!d.focused;if first{name.request_focus();d.focused=true;cmds.push(Cmd::Focus);}
-        if !first && c.ui.input(|i|i.key_pressed(egui::Key::Enter)){self.save_calendar_editor();}
+        if !first && ui.input(|i|i.key_pressed(egui::Key::Enter)){self.save_calendar_editor();}
     }
 }

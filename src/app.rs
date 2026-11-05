@@ -1121,7 +1121,9 @@ impl App {
     }
 
     fn content_scale(&self)->f32 {
-        lerp(1.0,self.opts.expanded_scale,anim::clamp01(self.progress()))
+        let (width,_)=self.base_size();
+        let progress=(self.w.pos-width)/(PW*self.opts.expanded_scale-width);
+        lerp(1.0,self.opts.expanded_scale,anim::clamp01(progress))
     }
 
     pub(crate) fn expanded_height(&self)->f32 {
@@ -1306,7 +1308,7 @@ impl App {
         shape::fill(&painter, panel, flare, flare_h, radius, Color32::BLACK, feather);
         if let Some(r)=notice_shape {shape::fill(&painter,r,5.0,8.0,12.5,Color32::BLACK,feather);}
 
-        // 内容只随形体「揭开」：不缩放，按面板裁剪，到 55% 才开始淡入
+        // 内容随展开进度放大，按当前面板裁剪，到 55% 才开始淡入。
         let reveal = if self.open { smoothstep(0.50, 0.97, p) } else { smoothstep(0.55, 0.92, p) };
         self.reveal = reveal;
         let origin = Pos2::new(cx - PW*scale / 2.0, top);
@@ -1376,11 +1378,11 @@ impl App {
             self.toast_layer(&toast,(h+8.0)/scale)
         }else{None};
         if (self.adding||self.editing.is_some()) && reveal > 0.9 && self.page == 4 && self.page_e() > 0.25 {
-            self.input_field(&base, &mut cmds);
+            self.input_field(ui,origin,scale,&mut cmds);
         }
 
-        if self.task_dialog.is_some() && reveal>0.9 {self.task_editor_inputs(&base,&mut cmds);}
-        if self.calendar.draft.is_some() && reveal>0.9 {self.calendar_editor_inputs(&base,&mut cmds);}
+        if self.task_dialog.is_some() && reveal>0.9 {self.task_editor_inputs(ui,origin,scale,&mut cmds);}
+        if self.calendar.draft.is_some() && reveal>0.9 {self.calendar_editor_inputs(ui,origin,scale,&mut cmds);}
 
         // ---------- 输出 ----------
         let rel = |r: Rect| r.translate(-win.min.to_vec2());
@@ -1430,7 +1432,7 @@ impl App {
             region: rel(floating_toast.map_or(region,|toast|region.union(toast)).intersect(ui.max_rect())),
             hit: rel(self.hit_rect(cx, top, self.progress())),
             notice_hit:notice_shape.map(|r|rel(notice_details.map_or(r,|details|r.union(details)))),
-            file_drop_zone:self.settings.visible_pages[3].then(||rel(base.rect(0.0,0.0,PW,96.0))),
+            file_drop_zone:self.settings.visible_pages[3].then(||rel(Rect::from_min_size(origin,Vec2::new(PW,96.0)*scale))),
             expanded: self.open,
             editing: self.is_editing(),
             animating,
@@ -2003,19 +2005,17 @@ impl App {
     }
 
     /// 待办输入框：真正的 egui 文本框，放在待办卡片顶部那一行。
-    fn input_field(&mut self, c: &Card, cmds: &mut Vec<Cmd>) {
-        let rect = c.rect(222.0,37.0,142.0,18.0);
+    fn input_field(&mut self, ui:&mut egui::Ui, origin:Pos2, scale:f32, cmds: &mut Vec<Cmd>) {
+        let rect = Rect::from_min_size(origin+Vec2::new(222.0,37.0)*scale,Vec2::new(142.0,18.0)*scale);
         let mut buf = std::mem::take(&mut self.buf);
         let te = egui::TextEdit::singleline(&mut buf)
             .id(egui::Id::new("todo-input"))
             .frame(false)
             .margin(egui::Margin::ZERO)
             .text_color(theme::WHITE)
-            .font(c.font(size::BODY, W::Regular))
-            .hint_text(egui::RichText::new("要做点什么？回车保存").color(theme::DIM).font(c.font(size::BODY, W::Regular)))
+            .font(theme::font(size::BODY*scale, W::Regular))
+            .hint_text(egui::RichText::new("要做点什么？回车保存").color(theme::DIM).font(theme::font(size::BODY*scale, W::Regular)))
             .desired_width(rect.width());
-        let mut input_ui=c.ui.new_child(egui::UiBuilder::new().max_rect(rect));
-        let ui=&mut input_ui;
         let resp = ui.put(rect, te);
         let first_focus=!self.todo_input_focused;
         self.buf=buf;

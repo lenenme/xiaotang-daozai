@@ -46,6 +46,15 @@ fn enlarged_panel_scales_five_pages_and_hit_regions_at_multiple_dpi(){
 }
 
 #[test]
+fn enlarged_panel_keeps_text_size_when_switching_to_taller_calendar(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=enlarged();
+    h.hover(Pos2::new(HOST_W/2.0,15.0),1.5);
+    h.app.show_page(7);h.frame(vec![]);
+    let settings=h.ctx.read_response(egui::Id::new(("card",true,"page-settings"))).unwrap().rect;
+    assert!((settings.width()-28.0*EXPANDED_SCALE).abs()<0.1,"切换页面高度时字号与按钮不能先缩小再放大");
+}
+
+#[test]
 fn enlarged_panel_accepts_hover_in_added_area_and_returns_to_original_size(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=enlarged();
     for _ in 0..90{h.frame(vec![]);}let collapsed=h.hit.size();let width=h.app.current_width();
@@ -108,6 +117,38 @@ fn enlarged_panel_music_seek_uses_the_enlarged_track_position(){
     let track=h.ctx.read_response(egui::Id::new(("card",true,"m-seek"))).unwrap().rect;
     h.cmds.clear();h.click(track.center());
     assert!(h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Media(crate::smtc::Transport::Seek(seconds)) if (*seconds-100.0).abs()<2.0)));
+}
+
+#[cfg(feature="record")]
+#[test]
+fn enlarged_panel_mail_body_scroll_does_not_switch_pages(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=enlarged();
+    h.app.mail_demo();
+    let account=h.app.mail.recent[0].account.clone();let uid=h.app.mail.recent[0].uid;
+    h.app.mail.recent[0].summary="放大后的邮件正文应可滚动阅读。".repeat(40).into();
+    h.app.mail.open_uid=Some((account.clone(),uid));h.app.show_page(5);
+    h.hover(point(270.0,150.0),1.5);
+    assert!((h.hit.height()-(236.0*EXPANDED_SCALE+2.0)).abs()<0.1);
+    h.wheel(-120.0);
+    assert_eq!(h.app.page(),5);
+    assert_eq!(h.app.mail.open_uid,Some((account,uid)));
+}
+
+#[test]
+fn enlarged_panel_shelf_drop_and_remove_keep_the_original_file(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=enlarged();
+    let file=crate::model::config_dir().join("drop-fixture.txt");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();std::fs::write(&file,"synthetic file").unwrap();
+    h.frame(vec![]);let zone=h.file_drop_zone.unwrap();
+    h.cursor=Some(zone.center());h.hovered_files.push(egui::HoveredFile{path:Some(file.clone()),..Default::default()});
+    for _ in 0..90{h.frame(vec![]);}
+    assert!(h.app.open && h.app.page()==3);
+    assert!((h.file_drop_zone.unwrap().width()-PW*EXPANDED_SCALE).abs()<0.1);
+    h.hovered_files.clear();h.dropped_files.push(egui::DroppedFile{path:Some(file.clone()),..Default::default()});
+    h.frame(vec![]);h.hover(point(PW/2.0,60.0),1.5);
+    assert!(h.app.shelf.items.contains(&file));
+    let remove=h.ctx.read_response(egui::Id::new(("card",true,("shelf-remove",&file)))).unwrap().rect;
+    h.click(remove.center());assert!(!h.app.shelf.items.contains(&file));assert!(file.is_file());
 }
 
 #[cfg(feature="record")]

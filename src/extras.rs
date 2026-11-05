@@ -627,15 +627,14 @@ impl App {
             if reminder_only{if let Some(d)=self.task_dialog.as_mut(){d.picker.show();}}else{self.save_task_editor();}
         }
     }
-    pub(crate) fn task_editor_inputs(&mut self,c:&Card,cmds:&mut Vec<Cmd>){
+    pub(crate) fn task_editor_inputs(&mut self,ui:&mut egui::Ui,origin:egui::Pos2,scale:f32,cmds:&mut Vec<Cmd>){
         let Some(d)=self.task_dialog.as_mut() else{return};
         if d.reminder_only || d.picker.open{return;}
-        let mut input_ui=c.ui.new_child(egui::UiBuilder::new().max_rect(c.ui.max_rect()));
-        let name=input_ui.put(c.rect(97.0,35.0,260.0,17.0),egui::TextEdit::singleline(&mut d.text).vertical_align(egui::Align::Center).id(egui::Id::new("task-name-edit")).frame(false).font(c.font(11.5,W::Regular)));
+        let name=ui.put(Rect::from_min_size(origin+egui::vec2(97.0,35.0)*scale,egui::vec2(260.0,17.0)*scale),egui::TextEdit::singleline(&mut d.text).vertical_align(egui::Align::Center).id(egui::Id::new("task-name-edit")).frame(false).font(theme::font(11.5*scale,W::Regular)));
         let first_focus=!d.focused;
         if first_focus{name.request_focus();d.focused=true;cmds.push(Cmd::Focus);}
         // 新建内容与下一步共用这一帧，避免同一次回车又提交了空提醒。
-        if !first_focus && c.ui.input(|i|i.key_pressed(egui::Key::Enter)){self.save_task_editor();}
+        if !first_focus && ui.input(|i|i.key_pressed(egui::Key::Enter)){self.save_task_editor();}
     }
     fn draw_task_reminder(&mut self,c:&Card){
         use crate::task_picker::PickerAction;

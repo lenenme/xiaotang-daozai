@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::{EXPANDED_SCALE, HOST_H, HOST_W};
+use crate::app::{Cmd, EXPANDED_SCALE, HOST_H, HOST_W};
 
 fn enlarged() -> H {
     let mut h=H::new();

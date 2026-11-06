@@ -12,6 +12,26 @@ fn point(x:f32,y:f32)->Pos2 {
 }
 
 #[test]
+fn new_mail_reminder_is_visible_while_the_expanded_mail_page_stays_open(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=enlarged();
+    h.app.mail.accounts=vec![crate::mail::Account{email:"test@example.com".into(),provider:crate::mail::Provider::Mail163,custom:None,enabled:true}];
+    let mail=crate::mail::Item{received_unix:None,account:"test@example.com".into(),from:"测试发件人".into(),subject:"测试邮件".into(),time:"09:41".into(),code:None,summary:"邮件正文".into(),links:vec![],meeting:None,uid:42};
+    let visible=|h:&H|h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(t) if t.galley.text()=="新邮件" && shape.clip_rect.contains_rect(t.visual_bounding_rect()) && h.hit.contains_rect(t.visual_bounding_rect())));
+    h.app.show_page(5);h.hover(point(210.0,30.0),1.0);
+    h.app.mail_event(crate::mail::Event::Mail{item:mail.clone(),new:false});h.frame(vec![]);
+    assert!(!visible(&h),"历史邮件不应弹出提醒");
+    h.app.alert("系统音量","音量 30%",5,false);h.frame(vec![]);
+    h.app.mail_event(crate::mail::Event::Mail{item:crate::mail::Item{uid:43,..mail},new:true});h.frame(vec![]);
+    assert!(h.app.open && h.app.page==5);
+    assert_eq!(h.app.mail.recent[0].uid,43);
+    assert!(visible(&h),"邮件页保持展开且有其他提醒时，新邮件提示也应立即显示");
+    h.t+=2.6;h.frame(vec![]);
+    assert!(visible(&h),"轮到新邮件提醒后，提示应保持可见");
+    h.t+=8.1;h.frame(vec![]);
+    assert!(h.app.open && !visible(&h),"提醒到期后应消失，邮件页继续展开");
+}
+
+#[test]
 fn enlarged_panel_keeps_collapsed_geometry_and_fonts_unchanged(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     assert_eq!(Options::default().expanded_scale,EXPANDED_SCALE);

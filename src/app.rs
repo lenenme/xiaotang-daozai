@@ -1654,6 +1654,11 @@ impl App {
     // 面板主体：页标题 + 页面（带切页过渡）+ 翻页箭头 + 页码豆
     // ---------------------------------------------------------------
     fn panel_body(&mut self, c: &Card, env: &Env, cmds: &mut Vec<Cmd>) {
+        if self.settings.notifications && self.settings.mail_enabled && self.notice.iter().chain(&self.alerts).any(|a|
+            a.source==crate::extras::AlertSource::Internal && a.title=="新邮件") {
+            c.fill(316.0,7.0,58.0,22.0,11.0,theme::BTN);
+            c.centered_text(345.0,18.0,"新邮件",11.0,W::Semibold,theme::CYAN,H::Center);
+        }
         let settings=c.hit(380.0,4.0,28.0,28.0,"page-settings").on_hover_text(format!("打开{}设置窗口",PAGE_NAMES[self.page]));
         let (hover,press)=c.hover_t(&settings);
         c.circle(394.0,18.0,13.0,Color32::from_white_alpha((hover*24.0) as u8));

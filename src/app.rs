@@ -121,6 +121,7 @@ pub enum Cmd {
     Reveal(PathBuf),
     Copy(String),
     Notify(String, String),
+    SpeakNewMail,
     RequestNotifications,
     DisconnectNotifications,
     ToggleAutostart,
@@ -574,6 +575,9 @@ impl App {
                     let body=format!("{} · {}",item.from,item.subject);
                     let body=item.code.as_ref().map(|code|crate::mail_privacy::mask(&body,code)).unwrap_or(body);
                     self.alert("新邮件",body,5,false);
+                    if self.settings.notifications && self.settings.mail_voice {
+                        self.pending.push(Cmd::SpeakNewMail);
+                    }
                     self.notification_bell_at = self.t;
                     self.notification_bell_until = self.t + 6.0;
                 }

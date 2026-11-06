@@ -1,6 +1,6 @@
 [package]
 name = "daozai"
-version = "0.6.53"
+version = "0.6.54"
 edition = "2021"
 license = "MIT"
 description = "岛仔：Windows 顶部的桌面伙伴与信息岛"
@@ -78,6 +78,7 @@ windows = { version = "0.58", features = [
   "Foundation_Collections",
   "Storage_Streams",
   "Win32_Media_Audio_Endpoints",
+  "Win32_Media_Speech",
   "Win32_Media_Audio",
   "Win32_System_WinRT",
   "UI_Notifications_Management",

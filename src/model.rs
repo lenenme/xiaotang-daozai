@@ -116,6 +116,7 @@ pub struct Settings {
     pub water_end: u32,
     /// v0.5.5 邮件提醒：总开关、验证码高亮、轮询间隔（秒）、会议提前量（分钟）。
     pub mail_enabled: bool,
+    pub mail_voice: bool,
     pub mail_code: bool,
     pub mail_code_hide_seconds:u32,
     pub mail_interval: u32,
@@ -129,7 +130,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { display_id: String::new(), settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 8], page_order: [0,1,2,3,4,5,6,7], show_battery: true, clock_12h: false, clock_period: 0, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, read_notifications:false, notification_preview:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, mail_enabled: true, mail_code: true, mail_code_hide_seconds:60, mail_interval: 10, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true }
+        Self { display_id: String::new(), settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 8], page_order: [0,1,2,3,4,5,6,7], show_battery: true, clock_12h: false, clock_period: 0, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, read_notifications:false, notification_preview:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, mail_enabled: true, mail_voice: false, mail_code: true, mail_code_hide_seconds:60, mail_interval: 10, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true }
     }
 }
 
@@ -193,6 +194,7 @@ impl Settings {
                 "water_start" => s.water_start = v.parse::<u32>().unwrap_or(9).min(23),
                 "water_end" => s.water_end = v.parse::<u32>().unwrap_or(22).min(24),
                 "mail_enabled" => s.mail_enabled = v != "0",
+                "mail_voice" => s.mail_voice = v == "1",
                 "mail_code" => s.mail_code = v != "0",
                 "mail_code_hide_seconds" => s.mail_code_hide_seconds=v.parse::<u32>().unwrap_or(60).clamp(15,300),
                 "mail_interval" => s.mail_interval = match v.parse::<u32>().unwrap_or(10) { 10 => 10, 60 => 60, 120 => 120, 300 => 300, _ => 10 },
@@ -241,6 +243,7 @@ impl Settings {
                 ("water_start".into(), self.water_start.to_string()),
                 ("water_end".into(), self.water_end.to_string()),
                 ("mail_enabled".into(), (self.mail_enabled as u8).to_string()),
+                ("mail_voice".into(), (self.mail_voice as u8).to_string()),
                 ("mail_code".into(), (self.mail_code as u8).to_string()),
                 ("mail_code_hide_seconds".into(), self.mail_code_hide_seconds.to_string()),
                 ("mail_interval".into(), self.mail_interval.to_string()),

@@ -1170,6 +1170,8 @@ impl App {
                         settings_card(ui,|ui|{
                             setting_row(ui,"新邮件提醒","新邮件到达时显示提醒；岛上歌词模式显示右侧图标",&mut self.settings.mail_enabled);
                             ui.separator();
+                            setting_row(ui,"新邮件语音","使用 Windows 中文语音播报「收到新邮件」",&mut self.settings.mail_voice);
+                            ui.separator();
                             setting_row(ui,"验证码高亮","识别到验证码时在岛上放大显示，点击即复制",&mut self.settings.mail_code);
                             ui.separator();
                             setting_choices(ui,"验证码隐藏",&mut self.settings.mail_code_hide_seconds,[30,60,300],"秒");
